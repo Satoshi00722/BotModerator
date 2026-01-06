@@ -10,7 +10,11 @@ async def show_channels(callback: CallbackQuery):
     channels = get_channels()
 
     if not channels:
-        await send_clean(callback.message, "❌ Каналов пока нет", back_kb())
+        await send_clean(
+            callback.message,
+            "❌ Каналов пока нет",
+            back_kb()
+        )
         return
 
     keyboard = []
@@ -36,3 +40,4 @@ async def show_channels(callback: CallbackQuery):
         InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode="Markdown"
     )
+
