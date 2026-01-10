@@ -55,6 +55,26 @@ async def receive_post(message: Message):
     _, title, username = channel
     user_post[user_id] = text
 
+    bot = message.bot
+
+    # ✅ ПРОВЕРКА ПОДПИСКИ СРАЗУ
+    try:
+        member = await bot.get_chat_member(f"@{username}", user_id)
+
+        if member.status in ("member", "administrator", "creator"):
+            await bot.send_message(f"@{username}", text)
+            update_post_time(user_id)
+
+            user_channel.pop(user_id, None)
+            user_post.pop(user_id, None)
+
+            await send_clean(message, "✅ Вы уже подписаны, пост опубликован")
+            return
+
+    except Exception:
+        pass
+
+    # ❗ если не подписан — показываем кнопки
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -94,13 +114,20 @@ async def check_subscribe(callback: CallbackQuery):
         return
 
     channel_id = user_channel[user_id]
+    channel = get_channel(channel_id)
+
+    if not channel:
+        await callback.answer("❌ Канал не найден", show_alert=True)
+        return
+
+    _, _, username = channel
     bot = callback.bot
 
     try:
-        member = await bot.get_chat_member(channel_id, user_id)
+        member = await bot.get_chat_member(f"@{username}", user_id)
 
         if member.status in ("member", "administrator", "creator"):
-            await bot.send_message(channel_id, user_post[user_id])
+            await bot.send_message(f"@{username}", user_post[user_id])
             update_post_time(user_id)
 
             user_channel.pop(user_id, None)
