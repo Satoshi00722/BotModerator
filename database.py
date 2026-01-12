@@ -9,7 +9,8 @@ cursor = conn.cursor()
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
-    last_post TEXT
+    day TEXT,
+    posts_count INTEGER
 )
 """)
 
@@ -47,35 +48,62 @@ def get_channel(channel_id: int):
 
 
 def delete_channel(channel_id: int):
-    """
-    Удаляет канал из базы, если бот был удалён
-    или канал больше недоступен
-    """
     cursor.execute(
         "DELETE FROM channels WHERE channel_id = ?",
         (channel_id,)
     )
     conn.commit()
 
-# ================== POSTS LIMIT ==================
+# ================== POSTS LIMIT (3 / DAY) ==================
 def can_post(user_id: int) -> bool:
+    today = datetime.now().date().isoformat()
+
     cursor.execute(
-        "SELECT last_post FROM users WHERE user_id = ?",
+        "SELECT day, posts_count FROM users WHERE user_id = ?",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+
+    # если юзера нет — можно постить
+    if not row:
+        return True
+
+    day, count = row
+
+    # если новый день — сбрасываем лимит
+    if day != today:
+        return True
+
+    # лимит 3 поста
+    return count < 3
+
+
+def update_post_time(user_id: int):
+    today = datetime.now().date().isoformat()
+
+    cursor.execute(
+        "SELECT day, posts_count FROM users WHERE user_id = ?",
         (user_id,)
     )
     row = cursor.fetchone()
 
     if not row:
-        return True
+        cursor.execute(
+            "INSERT INTO users (user_id, day, posts_count) VALUES (?, ?, ?)",
+            (user_id, today, 1)
+        )
+    else:
+        day, count = row
 
-    return datetime.now() - datetime.fromisoformat(row[0]) >= timedelta(days=1)
+        if day != today:
+            cursor.execute(
+                "UPDATE users SET day = ?, posts_count = ? WHERE user_id = ?",
+                (today, 1, user_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE users SET posts_count = posts_count + 1 WHERE user_id = ?",
+                (user_id,)
+            )
 
-
-def update_post_time(user_id: int):
-    cursor.execute(
-        "INSERT OR REPLACE INTO users (user_id, last_post) VALUES (?, ?)",
-        (user_id, datetime.now().isoformat())
-    )
     conn.commit()
-
-
