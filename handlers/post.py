@@ -3,6 +3,7 @@ from aiogram.types import (
     Message, CallbackQuery,
     InlineKeyboardMarkup, InlineKeyboardButton
 )
+
 from database import can_post, update_post_time, get_channel
 from filters import bad_words_check
 from handlers.common import (
@@ -11,6 +12,7 @@ from handlers.common import (
     user_channel,
     user_post
 )
+from config import ADMIN_IDS
 
 router = Router()
 
@@ -31,24 +33,39 @@ async def select_channel(callback: CallbackQuery):
 @router.message()
 async def receive_post(message: Message):
     user_id = message.from_user.id
+
     if user_id not in user_channel:
         return
 
     text = message.text or ""
 
     if bad_words_check(text):
-        await send_clean(message, "❌ Реклама запрещена правилами", back_kb())
+        await send_clean(
+            message,
+            "❌ Реклама запрещена правилами",
+            back_kb()
+        )
         return
 
-    if not can_post(user_id):
-        await send_clean(message, "⏳ Можно публиковать 1 пост в 24 часа", back_kb())
-        return
+    # ⛔ ЛИМИТ ТОЛЬКО ДЛЯ НЕ-АДМИНОВ
+    if user_id not in ADMIN_IDS:
+        if not can_post(user_id):
+            await send_clean(
+                message,
+                "⏳ Можно публиковать не более 3 постов в сутки",
+                back_kb()
+            )
+            return
 
     channel_id = user_channel[user_id]
     channel = get_channel(channel_id)
 
     if not channel:
-        await send_clean(message, "❌ Канал не найден", back_kb())
+        await send_clean(
+            message,
+            "❌ Канал не найден",
+            back_kb()
+        )
         user_channel.pop(user_id, None)
         return
 
@@ -57,24 +74,28 @@ async def receive_post(message: Message):
 
     bot = message.bot
 
-    # ✅ ПРОВЕРКА ПОДПИСКИ СРАЗУ
+    # ✅ ПРОВЕРКА ПОДПИСКИ
     try:
         member = await bot.get_chat_member(f"@{username}", user_id)
 
         if member.status in ("member", "administrator", "creator"):
             await bot.send_message(f"@{username}", text)
-            update_post_time(user_id)
+
+            if user_id not in ADMIN_IDS:
+                update_post_time(user_id)
 
             user_channel.pop(user_id, None)
             user_post.pop(user_id, None)
 
-            await send_clean(message, "✅ Вы уже подписаны, пост опубликован")
+            await send_clean(
+                message,
+                "✅ Пост опубликован"
+            )
             return
 
     except Exception:
         pass
 
-    # ❗ если не подписан — показываем кнопки
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -110,14 +131,20 @@ async def check_subscribe(callback: CallbackQuery):
     user_id = callback.from_user.id
 
     if user_id not in user_channel or user_id not in user_post:
-        await callback.answer("❌ Данные устарели", show_alert=True)
+        await callback.answer(
+            "❌ Данные устарели",
+            show_alert=True
+        )
         return
 
     channel_id = user_channel[user_id]
     channel = get_channel(channel_id)
 
     if not channel:
-        await callback.answer("❌ Канал не найден", show_alert=True)
+        await callback.answer(
+            "❌ Канал не найден",
+            show_alert=True
+        )
         return
 
     _, _, username = channel
@@ -127,15 +154,28 @@ async def check_subscribe(callback: CallbackQuery):
         member = await bot.get_chat_member(f"@{username}", user_id)
 
         if member.status in ("member", "administrator", "creator"):
-            await bot.send_message(f"@{username}", user_post[user_id])
-            update_post_time(user_id)
+            await bot.send_message(
+                f"@{username}",
+                user_post[user_id]
+            )
+
+            if user_id not in ADMIN_IDS:
+                update_post_time(user_id)
 
             user_channel.pop(user_id, None)
             user_post.pop(user_id, None)
 
-            await callback.message.edit_text("✅ Пост успешно опубликован")
+            await callback.message.edit_text(
+                "✅ Пост успешно опубликован"
+            )
         else:
-            await callback.answer("❌ Вы не подписались на канал", show_alert=True)
+            await callback.answer(
+                "❌ Вы не подписались на канал",
+                show_alert=True
+            )
 
     except Exception:
-        await callback.answer("❌ Подпишитесь на канал и попробуйте снова", show_alert=True)
+        await callback.answer(
+            "❌ Подпишитесь на канал и попробуйте снова",
+            show_alert=True
+        )
