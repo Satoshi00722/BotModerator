@@ -16,6 +16,15 @@ from config import ADMIN_IDS
 
 router = Router()
 
+# 🔻 ХЕШТЕГИ ДЛЯ ВСЕХ ПОСТОВ
+HASHTAGS = "\n\n#byevsi #byevse"
+
+def add_hashtags(text: str) -> str:
+    text = text.rstrip()
+    if "#byevsi" in text or "#byevse" in text:
+        return text
+    return text + HASHTAGS
+
 
 @router.callback_query(F.data.startswith("select_"))
 async def select_channel(callback: CallbackQuery):
@@ -70,7 +79,10 @@ async def receive_post(message: Message):
         return
 
     _, title, username = channel
-    user_post[user_id] = text
+
+    # ✅ добавляем хештеги сразу
+    final_text = add_hashtags(text)
+    user_post[user_id] = final_text
 
     bot = message.bot
 
@@ -79,7 +91,7 @@ async def receive_post(message: Message):
         member = await bot.get_chat_member(f"@{username}", user_id)
 
         if member.status in ("member", "administrator", "creator"):
-            await bot.send_message(f"@{username}", text)
+            await bot.send_message(f"@{username}", final_text)
 
             if user_id not in ADMIN_IDS:
                 update_post_time(user_id)
@@ -179,3 +191,5 @@ async def check_subscribe(callback: CallbackQuery):
             "❌ Подпишитесь на канал и попробуйте снова",
             show_alert=True
         )
+
+
